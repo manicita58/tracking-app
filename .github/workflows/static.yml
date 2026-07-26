@@ -1,28 +1,27 @@
-# Simple workflow for deploying static content to GitHub Pages
+# Publica el contenido estático en GitHub Pages.
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
+  # Corre en cada push a la rama por defecto
   push:
     branches: ["main"]
 
-  # Allows you to run this workflow manually from the Actions tab
+  # Permite lanzarlo a mano desde la pestaña Actions
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Permisos mínimos para que deploy-pages publique vía OIDC
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Un solo despliegue a la vez. No cancela el que está en curso:
+# se deja terminar para no dejar Pages en un estado a medias.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
   deploy:
     environment:
       name: github-pages
@@ -30,14 +29,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      # El repo es público: si alguna vez se edita el plan y se olvida
+      # cifrarlo, esto corta el despliegue antes de publicarlo.
+      - name: Verificar que el plan no viaje en claro
+        run: |
+          if grep -rlE 'Carlos, Bogot|Fulbright|testosterona' --include='*.html' --include='*.json' . ; then
+            echo "::error::Hay contenido personal sin cifrar. Se aborta el despliegue."
+            exit 1
+          fi
+          grep -q "const PLAN_ENC='.\{100,\}'" index.html \
+            || { echo "::error::index.html no trae el plan cifrado (PLAN_ENC vacio)."; exit 1; }
+          echo "OK: el plan va cifrado."
+
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
+
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
-          # Upload entire repository
+          # Sube el repositorio entero
           path: '.'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
