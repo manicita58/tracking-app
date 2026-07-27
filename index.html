@@ -727,7 +727,7 @@ View.english = function(){
     ? doneN+'/'+tasks.length+' hechas'
     : 'plan del día \u00b7 solo se marca hoy';
   if(isToday) $('english').querySelectorAll('.subtask').forEach(el=>{
-    const go=()=>{ rec[el.dataset.e]=!rec[el.dataset.e]; Store.save(); render(); };
+    const go=()=>{ const r=Store.eng(); r[el.dataset.e]=!r[el.dataset.e]; Store.save(); render(); };
     el.onclick=go;
     el.onkeydown=e=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); go(); } };
   });
@@ -745,7 +745,7 @@ View.focus = function(){
     +'<p class="note">Solo dos ranuras, a propósito. Lo que no cabe aquí no está activo esta semana '
     +'— no es que no exista.</p>'
     +'</div></div>';
-  ['p1','p2'].forEach(id=>$(id).onchange=()=>{ f[id]=$(id).value; Store.save(); });
+  ['p1','p2'].forEach(id=>$(id).onchange=()=>{ Store.focus()[id]=$(id).value; Store.save(); });
 };
 
 
@@ -756,7 +756,9 @@ View.habits = function(){
     const el=document.createElement('button');
     el.type='button'; el.className='pill'; el.setAttribute('aria-pressed',on);
     el.innerHTML='<span class="dot"></span><span class="txt">'+x[1]+'</span>';
-    el.onclick=()=>{ rec[x[0]]=!rec[x[0]]; Store.save(); render(); };
+    /* Store.habits() se resuelve al tocar, no al renderizar: si la app quedó
+       abierta desde ayer, el registro capturado sería el del día anterior. */
+    el.onclick=()=>{ const r=Store.habits(); r[x[0]]=!r[x[0]]; Store.save(); render(); };
     w.appendChild(el);
   });
   const st=habitStreak();
@@ -1152,9 +1154,21 @@ $('resetBtn').onclick=()=>{
   Store.save(); render(); show('semana');
 };
 
+/* La app es una PWA que se queda abierta en segundo plano durante días, y
+   render() solo corría al arrancar o al tocar algo. Sin esto, al volver al día
+   siguiente seguías viendo —y marcando— el día anterior. */
+let renderedDay = dayISO();
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState!=='visible' || dayISO()===renderedDay) return;
+  renderedDay = dayISO();
+  viewDay = bogota().getUTCDay();
+  render();
+});
+
 function boot(){
   $('lock').style.display='none';
   Store.load();
+  renderedDay = dayISO();
   render();
   show(S.tab || 'hoy');   // vuelve a la pestaña donde estabas
 }
