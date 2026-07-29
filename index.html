@@ -165,20 +165,6 @@ input,select{font-size:16px}
 .note{margin:12px 0 0;font-size:var(--t-xs);color:var(--muted);line-height:1.55}
 .note b{color:var(--ink-2);font-weight:600}
 
-.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 0 4px}
-.chip{min-height:44px;padding:0 14px;border-radius:10px;cursor:pointer;font-size:var(--t-sm);
-     background:var(--bg-2);border:1px solid var(--line);color:var(--ink-2);
-     transition:background var(--ms) var(--ease),border-color var(--ms) var(--ease),color var(--ms) var(--ease)}
-.chip:hover{color:var(--ink)}
-.chip.clean[aria-pressed="true"]{color:var(--ink);
-     background:color-mix(in oklab,var(--good) 20%,var(--surface));
-     border-color:color-mix(in oklab,var(--good) 55%,transparent)}
-.chip.bad[aria-pressed="true"]{color:var(--ink);
-     background:color-mix(in oklab,var(--bad) 20%,var(--surface));
-     border-color:color-mix(in oklab,var(--bad) 55%,transparent)}
-.streak{margin-left:auto;text-align:right;font-size:var(--t-xs);color:var(--muted)}
-.streak.go{color:var(--good)}
-
 .pills{display:flex;flex-wrap:wrap;gap:8px}
 .pill{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;
      border-radius:12px;cursor:pointer;font-size:var(--t-sm);
@@ -309,10 +295,6 @@ details.info .inner td:first-child{width:34%;padding-right:14px;color:var(--ink)
 .chart svg .grid{stroke:var(--line-soft)}
 .chart select{width:100%;margin-bottom:14px;padding:10px;border-radius:var(--r-sm);
   background:var(--bg-2);border:1px solid var(--line);color:var(--ink)}
-.dots{display:flex;flex-wrap:wrap;gap:5px;padding-top:3px}
-.dots i{display:block;width:14px;height:14px;border-radius:4px}
-.dots i.ok{background:var(--good)} .dots i.no{background:var(--bad)}
-
 .tabs{position:fixed;bottom:0;left:0;right:0;z-index:var(--z-tabs);display:flex;
       justify-content:center;background:var(--bg-2);border-top:1px solid var(--line-soft);
       padding-bottom:env(safe-area-inset-bottom)}
@@ -609,7 +591,7 @@ const Store = {
   train(){
     const k='w'+S.week+'d'+viewDay;
     const l = S.log[k] = S.log[k] || {};
-    l.done=l.done||{}; l.lifts=l.lifts||{}; l.blister=l.blister||{}; l.swim=l.swim||{};
+    l.done=l.done||{}; l.lifts=l.lifts||{}; l.swim=l.swim||{};
     return l;
   },
   // registros por fecha real
@@ -648,18 +630,6 @@ function lastLift(key){
     if(v && v.kg) return v;
   }
   return null;
-}
-
-function blisterStreak(){
-  const rows=[];
-  Object.keys(S.log).forEach(k=>{
-    const m=k.match(/^w(\d+)d(\d+)$/); if(!m) return;
-    rows.push({r:+m[1]*10+(+m[2]===0?7:+m[2]), b:S.log[k].blister||{}});
-  });
-  rows.sort((a,b)=>a.r-b.r);
-  let n=0;
-  rows.forEach(o=>Object.values(o.b).forEach(v=>{ if(v==='no')n++; else if(v==='si')n=0; }));
-  return n;
 }
 
 function daysBack(n){
@@ -724,13 +694,6 @@ View.sessions = function(){
           +'<div class="prev'+(beat?' beat':'')+'">'+(p?p.kg+'\u00d7'+p.reps+(beat?' \u2191':''):'\u2014')+'</div></div>';
       });
       h+='</div>';
-    } else if(s.k==='run'){
-      const bl=log.blister[s.id]||'', st=blisterStreak(), next=(RUN[S.week+1]||RUN[24])[1];
-      h+='<div class="body"><div class="chips">'
-        +'<button type="button" class="chip clean" data-b="'+s.id+'" data-v="no" aria-pressed="'+(bl==='no')+'">Sin ampolla</button>'
-        +'<button type="button" class="chip bad" data-b="'+s.id+'" data-v="si" aria-pressed="'+(bl==='si')+'">Ampolla</button>'
-        +'<span class="streak'+(st>=3?' go':'')+'">'
-        +(st>=3?'3 limpias \u00b7 sube a '+next:'Racha '+st+'/3')+'</span></div></div>';
     } else if(s.k==='swim'){
       /* Dos números, no uno: se nada por largos de 25 m, así que el volumen
          sube mucho antes que el tramo seguido. Con un solo campo el registro
@@ -758,9 +721,6 @@ View.sessions = function(){
       cell.className='prev'+(beat?' beat':'');
       cell.textContent=p ? p.kg+'×'+p.reps+(beat?' ↑':'') : '—';
     });
-    c.querySelectorAll('button[data-b]').forEach(btn=>btn.onclick=()=>{
-      const cur=log.blister[btn.dataset.b];
-      log.blister[btn.dataset.b]=(cur===btn.dataset.v)?'':btn.dataset.v; Store.save(); render(); });
     c.querySelectorAll('input[data-s]').forEach(i=>i.onchange=()=>{
       const r=log.swim[i.dataset.s]=log.swim[i.dataset.s]||{};
       r[i.dataset.sf]=i.value; Store.save(); });
@@ -985,19 +945,13 @@ const Series = {
       });
       return {x:'S'+w, y: tot?Math.round(ok/tot*100):0};
     });
-  },
-  blisters(){
-    const rows=[];
-    Object.keys(S.log).forEach(k=>{ const m=k.match(/^w(\d+)d(\d+)$/); if(!m) return;
-      Object.values(S.log[k].blister||{}).forEach(v=>{ if(v) rows.push({r:+m[1]*10+(+m[2]===0?7:+m[2]),v}); }); });
-    return rows.sort((a,b)=>a.r-b.r).map(o=>o.v);
   }
 };
 
 /* Datos era una tira de 6 gráficas apiladas: había que barrer toda la pantalla
    para llegar a la última. Ahora: resumen fijo arriba + una gráfica a la vez. */
 View.charts = function(){
-  const w=Series.weight(), cm=Series.compliance(), bd=Series.blisters();
+  const w=Series.weight(), cm=Series.compliance();
   const swT=Series.swim('tot'), sw=Series.swim('cont');
   const en=Series.english(), lifts=Series.liftKeys();
   const mes=SWIM[Math.min(6,Math.ceil(S.week/4))];
@@ -1008,7 +962,6 @@ View.charts = function(){
   const swVol   = swT.length ? Math.max(...swT.map(p=>p.y)) : null;
   const cmAvg   = cm.length ? Math.round(cm.reduce((a,b)=>a+b.y,0)/cm.length) : null;
   const wDelta  = w.length>=2 ? +(w[w.length-1].y-w[0].y).toFixed(1) : null;
-  const clean   = bd.filter(v=>v==='no').length;
 
   const stat=(v,l,tone)=>'<div class="stat'+(tone?' '+tone:'')+'"><b>'+v+'</b><span>'+l+'</span></div>';
   let head='<div class="stats">'
@@ -1076,14 +1029,6 @@ View.charts = function(){
         ? 'Promedio <b>'+cmAvg+'%</b> por semana. Por debajo de 80% el plan no rinde.'
           + '</p>' + Chart.bars(cm,'#F5B93E',100,'Porcentaje de sesiones completadas por semana')
         : 'Marca tus sesiones y aquí ves cuánto del plan cumples.</p>')
-    + '</div>'});
-
-  V.push({id:'ampollas', label:'Ampollas', html:
-    '<div class="chart"><h3>Historial de ampollas</h3><p class="cap">'
-    + (bd.length
-        ? '<b>'+clean+'</b> salidas limpias de <b>'+bd.length+'</b>. Verde limpio, rojo ampolla.'
-          + '</p><div class="dots">'+bd.map(v=>'<i class="'+(v==='no'?'ok':'no')+'"></i>').join('')+'</div>'
-        : 'Marca después de cada trote si salió ampolla y aquí queda el historial.</p>')
     + '</div>'});
 
   const cur = V.find(v=>v.id===S.chartView) ? S.chartView : V[0].id;
