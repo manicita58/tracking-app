@@ -8,13 +8,19 @@ import assert from 'node:assert/strict';
 const html = readFileSync(new URL('index.html', import.meta.url), 'utf8');
 const m = html.match(/\/\*LOGIC_START\*\/([\s\S]*?)\/\*LOGIC_END\*\//);
 if (!m) { console.error('FALLO: no hay bloque LOGIC en index.html'); process.exit(1); }
-const { mondayISO, advanceWeeks, repTop, REMAP_LIFTS, remapLifts, setsOf, e1rm, liftTrend, weightVerdict } =
-  new Function(m[1] + '; return {mondayISO, advanceWeeks, repTop, REMAP_LIFTS, remapLifts, setsOf, e1rm, liftTrend, weightVerdict};')();
+const { mondayISO, dowISO, advanceWeeks, repTop, REMAP_LIFTS, remapLifts, setsOf, e1rm, liftTrend, weightVerdict } =
+  new Function(m[1] + '; return {mondayISO, dowISO, advanceWeeks, repTop, REMAP_LIFTS, remapLifts, setsOf, e1rm, liftTrend, weightVerdict};')();
 
 // Lunes de la semana, en hora de Bogotá (UTC-5).
 assert.equal(mondayISO(Date.parse('2026-11-19T17:00:00Z')), '2026-11-16');   // jueves mediodía
 assert.equal(mondayISO(Date.parse('2026-11-23T04:30:00Z')), '2026-11-16');   // domingo 23:30
 assert.equal(mondayISO(Date.parse('2026-11-23T05:30:00Z')), '2026-11-23');   // lunes 00:30
+
+// Fecha real del día que se mira en Hoy: lunes a domingo de la semana en curso.
+assert.equal(dowISO('2026-11-16', 1), '2026-11-16');   // lunes
+assert.equal(dowISO('2026-11-16', 5), '2026-11-20');   // viernes
+assert.equal(dowISO('2026-11-16', 0), '2026-11-22');   // domingo cierra la semana
+assert.equal(dowISO('2026-12-28', 0), '2027-01-03');   // cruza de año
 
 // Avance de semanas: la primera vez solo ancla; después suma semanas enteras.
 const s = { week: 13, engWeek: 1, monday: null };
@@ -89,4 +95,4 @@ assert.equal(weightVerdict(0.1)[0], '');
 assert.equal(weightVerdict(0.3)[0], 'ok');
 assert.equal(weightVerdict(0.8)[0], 'warn');
 
-console.log('OK: lunes, avance de semanas, tope de reps, migración, fuerza estimada y peso.');
+console.log('OK: lunes, fecha del día, avance de semanas, tope de reps, migración, fuerza estimada y peso.');

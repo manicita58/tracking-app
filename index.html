@@ -111,6 +111,7 @@ input,select{font-size:16px}
 .tick:hover{border-color:var(--c)}
 .tick[aria-pressed="true"]{background:var(--c);border-color:var(--c)}
 .tick:active{transform:scale(.88)}
+.tick:disabled,.pill:disabled{opacity:.45;pointer-events:none}
 .ttl{flex:1;min-width:0}
 .ttl strong{display:block;font-size:var(--t-lg);font-weight:600;letter-spacing:-.012em}
 .ttl span{display:block;margin-top:2px;font-size:var(--t-xs);color:var(--muted);line-height:1.4}
@@ -272,7 +273,7 @@ details.info .inner td:first-child{width:34%;padding-right:14px;color:var(--ink)
 
 /* Resumen fijo: los cuatro números que se revisan cada 4 semanas, sin barrer. */
 /* Las tres pestañas de Datos son también el resumen: cada una lleva su número. */
-.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:14px}
 .kpi{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;min-height:62px;
      padding:10px 12px;border-radius:var(--r-md);cursor:pointer;text-align:left;
      background:var(--surface);border:1px solid var(--line-soft);color:var(--ink);
@@ -600,6 +601,8 @@ const DAY_MS    = 86400000;
 const bogota  = (t=Date.now()) => new Date(t - BOGOTA_MS);
 const dayISO  = (t=Date.now()) => bogota(t).toISOString().slice(0,10);
 const mondayISO = (t=Date.now()) => dayISO(t - ((bogota(t).getUTCDay()+6)%7)*DAY_MS);
+/* Fecha real de un día (0 = domingo) en la semana que arranca el lunes mon. */
+const dowISO = (mon, dow) => new Date(Date.parse(mon+'T00:00:00Z') + ((dow+6)%7)*DAY_MS).toISOString().slice(0,10);
 
 /* Las semanas pasan solas: cada lunes nuevo suma a la del gym y a la del inglés.
    La primera vez solo ancla el lunes actual. Con − y + se sigue corrigiendo a mano
@@ -681,6 +684,8 @@ const DEFAULTS = () => ({ week:1, engWeek:1, monday:null, log:{}, weights:{}, ha
 let S = DEFAULTS();
 let viewDay = bogota().getUTCDay();
 let canSave = true;
+const viewISO = () => dowISO(mondayISO(), viewDay);
+const viewFuture = () => viewISO() > dayISO();
 let chartsDirty = true;   // Store.save() es el único punto de mutación
 
 /* Frontera de confianza: el JSON importado viene de un archivo del usuario. */
@@ -760,9 +765,10 @@ const Store = {
     l.done=l.done||{}; l.lifts=l.lifts||{}; l.swim=l.swim||{};
     return l;
   },
-  // registros por fecha real
-  habits(){ return S.habits[dayISO()] = S.habits[dayISO()] || {}; },
-  eng(){    return S.eng[dayISO()]    = S.eng[dayISO()]    || {}; }
+  /* Registros por fecha real: la del día que se mira en Hoy, dentro de la semana
+     en curso. Así se puede marcar un día que ya pasó; los futuros no se marcan. */
+  habits(){ const d=viewISO(); return S.habits[d] = S.habits[d] || {}; },
+  eng(){    const d=viewISO(); return S.eng[d]    = S.eng[d]    || {}; }
 };
 
 /* ============================================================
@@ -941,12 +947,12 @@ View.english = function(){
   const rec = Store.eng(), tasks = engDay(viewDay, S.engWeek);
   const blk = ENG_BLOCKS.find(x=>S.engWeek<=x.max);
   const th  = ENG_THEMES[(S.engWeek-1) % ENG_THEMES.length];
-  const isToday = viewDay===bogota().getUTCDay();
+  const isToday = !viewFuture();   // editable: hoy o un día pasado de esta semana
   const doneN = tasks.filter(t=>rec[t]).length;
   const mins  = tasks.reduce((a,t)=>a+ENG_TASKS[t].m,0);
 
-  /* El inglés se registra por fecha real, no por día del plan: en otro día
-     solo se puede consultar. Se marca como tal en vez de fingir que responde. */
+  /* El inglés se registra por fecha real. Un día futuro solo se consulta:
+     se marca como tal en vez de fingir que responde. */
   let h='<div class="card eng'+(isToday?'':' readonly')+'"><div class="head"><div class="ttl">'
     +'<strong>'+blk.lvl+' \u00b7 '+blk.n+'</strong><span>Semana '+S.engWeek+' \u00b7 tema: '+th.t+'</span></div>'
     +'<div class="dur">'+mins+' min</div></div><div class="body">';
@@ -979,7 +985,7 @@ View.english = function(){
   det.querySelector('.copyPrompt').onclick=e=>copyText(e.currentTarget, engPrompt(blk, th));
   $('engCount').textContent = isToday
     ? doneN+'/'+tasks.length+' hechas'
-    : 'plan del día \u00b7 solo se marca hoy';
+    : 'plan del día \u00b7 aún no llega';
   if(isToday) $('english').querySelectorAll('.subtask').forEach(el=>{
     const go=()=>{ const r=Store.eng(); r[el.dataset.e]=!r[el.dataset.e]; Store.save(); render(); };
     el.onclick=go;
@@ -991,11 +997,11 @@ View.english = function(){
    se registra por fecha real en habits.am — la misma clave que la pastilla de
    Hábitos, para que el tick y la racha nunca se contradigan. */
 View.circuit = function(){
-  const on = !!Store.habits().am;
+  const on = !!Store.habits().am, fut = viewFuture();
   $('amCount').textContent = on ? 'hecho' : CIRCUIT.dur;
   $('circuit').innerHTML =
     '<div class="card am'+(on?' done':'')+'"><div class="head">'
-    +'<button type="button" class="tick" aria-pressed="'+on+'" aria-label="Marcar Circuito AM">'
+    +'<button type="button" class="tick" aria-pressed="'+on+'" aria-label="Marcar Circuito AM"'+(fut?' disabled':'')+'>'
     +(on?'✓':'')+'</button>'
     +'<div class="ttl"><strong>'+CIRCUIT.name+'</strong><span>'+CIRCUIT.sub+'</span></div>'
     +'<div class="dur">'+CIRCUIT.dur+'</div></div>'
@@ -1013,10 +1019,8 @@ View.habits = function(){
   HABITS.forEach(x=>{
     const on=!!rec[x[0]];
     const el=document.createElement('button');
-    el.type='button'; el.className='pill'; el.setAttribute('aria-pressed',on);
+    el.type='button'; el.className='pill'; el.setAttribute('aria-pressed',on); el.disabled=viewFuture();
     el.innerHTML='<span class="dot"></span><span class="txt">'+x[1]+'</span>';
-    /* Store.habits() se resuelve al tocar, no al renderizar: si la app quedó
-       abierta desde ayer, el registro capturado sería el del día anterior. */
     el.onclick=()=>{ const r=Store.habits(); r[x[0]]=!r[x[0]]; Store.save(); render(); };
     w.appendChild(el);
   });
@@ -1109,32 +1113,6 @@ const Draw = {
       +v.map((y,i)=>(i?'L':'M')+f1(X(i))+' '+f1(Y(y))).join(' ')+'"/>'
       +'<circle cx="'+f1(X(v.length-1))+'" cy="'+f1(Y(v[v.length-1]))+'" r="3.5"/></svg>';
   },
-  /* Peso contra la banda del superávit (+0,25 a +0,5 % por semana desde la primera marca). */
-  weight(P){
-    const n0=P[0].n, y0=P[0].y, n1=Math.max(P[P.length-1].n, n0+4);
-    const lo=n=>y0*Math.pow(1.0025,n-n0), hi=n=>y0*Math.pow(1.005,n-n0);
-    const W=320,H=150,PL=30,PR=34,PT=14,PB=24;
-    const ys=P.map(p=>p.y).concat([lo(n0),hi(n1)]);
-    const mn=Math.floor(Math.min(...ys)-0.3), mx=Math.ceil(Math.max(...ys)+0.3);
-    const X=n=>PL+(W-PL-PR)*(n-n0)/(n1-n0), Y=v=>PT+(H-PT-PB)*(1-(v-mn)/(mx-mn));
-    const ns=[]; for(let n=n0;n<=n1;n++) ns.push(n);
-    let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Peso por semana frente a la banda del superávit">';
-    for(let v=mn, st=Math.max(1,Math.ceil((mx-mn)/3)); v<=mx; v+=st)
-      s+='<line class="grid" x1="'+PL+'" x2="'+(W-PR)+'" y1="'+f1(Y(v))+'" y2="'+f1(Y(v))+'"/>'
-        +'<text x="'+(PL-6)+'" y="'+f1(Y(v)+3)+'" text-anchor="end">'+v+'</text>';
-    s+='<path class="band" d="M'+ns.map(n=>f1(X(n))+' '+f1(Y(hi(n)))).join(' L')
-      +' L'+ns.slice().reverse().map(n=>f1(X(n))+' '+f1(Y(lo(n)))).join(' L')+' Z"/>'
-      +'<text x="'+(W-PR+5)+'" y="'+f1(Y((lo(n1)+hi(n1))/2)+3)+'">meta</text>';
-    if(P.length>1) s+='<path class="ln" d="'+P.map((p,i)=>(i?'L':'M')+f1(X(p.n))+' '+f1(Y(p.y))).join(' ')+'"/>';
-    P.forEach(p=>{ s+='<circle class="dot" cx="'+f1(X(p.n))+'" cy="'+f1(Y(p.y))+'" r="4">'
-      +'<title>Semana '+p.n+': '+fmt1(p.y)+' kg</title></circle>'; });
-    const L=P[P.length-1];
-    s+='<text class="v" x="'+f1(X(L.n))+'" y="'+f1(Y(L.y)-9)+'" text-anchor="middle">'+fmt1(L.y)+'</text>';
-    const every=ns.length>9?2:1;
-    ns.forEach((n,i)=>{ if((ns.length-1-i)%every===0)
-      s+='<text x="'+f1(X(n))+'" y="'+(H-6)+'" text-anchor="middle">S'+n+'</text>'; });
-    return s+'</svg>';
-  },
   /* Porcentaje del plan cumplido por semana, con la meta de 80 %. */
   weeks(P){
     const W=320,H=136,PL=28,PR=34,PT=14,PB=22, ch=H-PT-PB;
@@ -1172,10 +1150,6 @@ const Draw = {
 };
 
 const Series = {
-  /* Últimas 12 semanas del plan: la banda del superávit arranca en la primera marca de ese tramo. */
-  weight(){ return Object.keys(S.weights).map(Number)
-    .filter(w=>w<=S.week && w>S.week-12 && +S.weights[w]>0)
-    .sort((a,b)=>a-b).map(w=>({n:w, y:+S.weights[w]})); },
   /* Semanas reales: nada del futuro, y la semana en curso solo cuenta hasta hoy. */
   compliance(){
     const hoy=(bogota().getUTCDay()+6)%7, out=[];
@@ -1411,24 +1385,6 @@ View.charts = function(){
   fz+='<p class="cap foot">La fuerza estimada junta peso y reps (fórmula de Epley): sube si subes peso o si haces '
     +'más reps con el mismo. Un salto raro suele ser otra máquina anotada en la misma casilla.</p></div>';
 
-  const W=Series.weight();
-  let pw='<div class="chart"><h3>Peso corporal</h3><p class="cap">';
-  if(!W.length) pw+='Pésate los lunes en ayunas: Hoy te lo pide ese día. Con dos semanas aparece tu línea contra '
-    +'la banda del superávit, subir entre 0,25 y 0,5 % del peso por semana.</p>';
-  else {
-    const L=W[W.length-1];
-    if(W.length===1) pw+='Primera marca: <b>'+fmt1(L.y)+' kg</b>. La línea aparece con la próxima semana. '
-      +'La franja verde es la meta: +0,25 a +0,5 % por semana.</p>';
-    else {
-      let r=0; W.forEach((p,i)=>{ if(p.n<=L.n-4) r=i; });
-      const R=W[r], wk=L.n-R.n, d=L.y-R.y, pct=(L.y/R.y-1)*100/wk, [,msg]=weightVerdict(pct);
-      pw+='<b>'+(d<0?'−':'+')+fmt1(Math.abs(d))+' kg</b> en '+pl(wk,'semana','semanas')+' ('
-        +fmt1(pct)+' % por semana): '+msg+'. La franja verde es la meta; una semana sola es ruido.</p>';
-    }
-    pw+=Draw.weight(W);
-  }
-  pw+='</div>';
-
   const CM=Series.compliance(), last4=CM.slice(-4);
   const cmAvg=last4.length ? Math.round(last4.reduce((a,p)=>a+p.y,0)/last4.length) : null;
   const E=Series.eng(), past=E.filter(x=>!x.fut), did=past.filter(x=>x.m>0);
@@ -1446,7 +1402,6 @@ View.charts = function(){
 
   const V=[
     {id:'fuerza',     label:'Fuerza',     val: tr.length ? pl(rising,'sube','suben') : '—', html:fz},
-    {id:'peso',       label:'Peso',       val: W.length ? fmt1(W[W.length-1].y)+' kg' : '—', html:pw},
     {id:'constancia', label:'Constancia', val: cmAvg===null ? '—' : cmAvg+' %', html:cs}
   ];
   const cur = V.find(v=>v.id===S.chartView) ? S.chartView : 'fuerza';
@@ -1621,13 +1576,16 @@ $('resetBtn').onclick=()=>{
    render() solo corría al arrancar o al tocar algo. Sin esto, al volver al día
    siguiente seguías viendo —y marcando— el día anterior. */
 let renderedDay = dayISO();
-document.addEventListener('visibilitychange', ()=>{
+function newDay(){
   if(document.visibilityState!=='visible' || dayISO()===renderedDay) return;
   renderedDay = dayISO();
   viewDay = bogota().getUTCDay();
   if(advanceWeeks(S, mondayISO())) Store.save();
   render();
-});
+}
+document.addEventListener('visibilitychange', newDay);
+window.addEventListener('focus', newDay);
+window.addEventListener('pageshow', newDay);
 
 function boot(){
   $('lock').style.display='none';
